@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "multidrop"
-version = "0.2.1"
-description = "AirDrop, Quick Share, LocalSend and AirPlay in one app for Windows and Linux"
+name = "beam"
+version = "1.0.0"
+description = "Beam: AirDrop-style sharing (Quick Share, LocalSend) and sharp AirPlay mirroring for Windows. A fork of MultiDrop."
 requires-python = ">=3.11"
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -39,10 +39,11 @@ windows = ["pystray>=0.19", "pillow>=10", "soundcard>=0.4.3; sys_platform == 'wi
            "pywebview>=5.0; sys_platform == 'win32'"]
 
 [project.urls]
-Homepage = "https://digitaldanis.github.io/multidrop/"
-Repository = "https://github.com/digitaldanis/multidrop"
-Issues = "https://github.com/digitaldanis/multidrop/issues"
-Changelog = "https://github.com/digitaldanis/multidrop/releases"
+Homepage = "https://github.com/Faris-5115/beam"
+Repository = "https://github.com/Faris-5115/beam"
+Issues = "https://github.com/Faris-5115/beam/issues"
+Changelog = "https://github.com/Faris-5115/beam/releases"
+Upstream = "https://github.com/digitaldanis/multidrop"
 
 [project.scripts]
 multidrop = "multidrop.cli:main"

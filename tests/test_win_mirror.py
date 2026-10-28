@@ -72,7 +72,7 @@ def test_engine_dir_from_environment_or_next_to_the_exe(tmp_path, monkeypatch, e
     assert win_mirror.engine_dir() == engine
     monkeypatch.setenv("MULTIDROP_MIRROR_DIR", str(tmp_path / "missing"))
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setattr(sys, "executable", str(tmp_path / "MultiDrop.exe"))
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "Beam.exe"))
     assert win_mirror.engine_dir() == engine
 
 

@@ -2,7 +2,7 @@
 and an entry in Explorer's "Send to" menu. Plus network access through the
 Windows Firewall, the one part that needs an admin prompt.
 
-The names match packaging/windows/multidrop.iss, so the installer and the
+The names match packaging/windows/beam.iss, so the installer and the
 tray menu switch the same entries.
 """
 
@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-APP_NAME = "MultiDrop"
+APP_NAME = "Beam"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
@@ -32,7 +32,7 @@ def _icon() -> str:
     PyInstaller temp dir would be gone after exit)."""
     if getattr(sys, "frozen", False):
         return f"{sys.executable},0"
-    return f"{Path(__file__).resolve().parents[2] / 'data' / 'icons' / 'multidrop.ico'},0"
+    return f"{Path(__file__).resolve().parents[2] / 'data' / 'icons' / 'beam.ico'},0"
 
 
 def _command(*extra: str) -> str:
@@ -89,12 +89,12 @@ def set_sendto(on: bool) -> None:
 
 # -- network access (Windows Firewall) ------------------------------------------
 #
-# Phones can only reach MultiDrop if the firewall lets them in. One rule for
+# Phones can only reach Beam if the firewall lets them in. One rule for
 # every network type, but only for devices on the same local network
 # (remoteip=localsubnet): Windows calls most Wi-Fis "public", and nothing on
 # the internet ever gets through. Firewall rules are per machine, so this
-# needs admin rights once: the installer, or MultiDrop itself on first start,
-# runs MultiDrop elevated with --allow-network, which calls allow_network().
+# needs admin rights once: the installer, or Beam itself on first start,
+# runs Beam elevated with --allow-network, which calls allow_network().
 
 FIREWALL_RULE = f"{APP_NAME} (local network)"
 OLD_FIREWALL_RULES = (APP_NAME,)        # private networks only, before 0.2
@@ -111,7 +111,7 @@ def firewall_rule_present() -> bool:
 
 
 def firewall_commands(tcp: list[int], udp: list[int]) -> list[list[str]]:
-    """Commands that replace MultiDrop's rules: deletes first, then adds."""
+    """Commands that replace Beam's rules: deletes first, then adds."""
     base = ["netsh", "advfirewall", "firewall"]
     rule = [f"name={FIREWALL_RULE}", "dir=in", "action=allow", "profile=any",
             "remoteip=localsubnet"]
@@ -134,7 +134,7 @@ def allow_network(tcp: list[int], udp: list[int]) -> int:
 
 
 def request_network_access(extra_args: list[str] = ()) -> bool:
-    """Start MultiDrop elevated with --allow-network; Windows shows its admin
+    """Start Beam elevated with --allow-network; Windows shows its admin
     prompt. False if the user said no or it failed."""
     program, args = launcher()
     script = ("$p = Start-Process -FilePath $env:MD_PROGRAM -ArgumentList $env:MD_ARGS "
@@ -155,7 +155,7 @@ def create_shortcut(link: Path, target: str, arguments: str, icon: str) -> None:
     link.parent.mkdir(parents=True, exist_ok=True)
     script = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:MD_LINK); "
               "$s.TargetPath = $env:MD_TARGET; $s.Arguments = $env:MD_ARGS; "
-              "$s.IconLocation = $env:MD_ICON; $s.Description = 'Send with MultiDrop'; "
+              "$s.IconLocation = $env:MD_ICON; $s.Description = 'Send with Beam'; "
               "$s.Save()")
     env = {**os.environ, "MD_LINK": str(link), "MD_TARGET": target,
            "MD_ARGS": arguments, "MD_ICON": icon}

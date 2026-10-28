@@ -38,6 +38,15 @@ def _xdg(var: str, fallback: str) -> Path:
 
 
 WINDOWS = os.name == "nt"
+# Beam keeps the multidrop package name internally (it is a MultiDrop fork); on
+# Windows, where Beam ships, its folders carry Beam's name, so an installed
+# MultiDrop and Beam never share state.
+WINDOWS_DIR = "Beam"
+
+
+def _windows_home() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    return Path(base) / WINDOWS_DIR
 
 
 def runtime_dir() -> Path:
@@ -45,8 +54,7 @@ def runtime_dir() -> Path:
     $XDG_RUNTIME_DIR wins everywhere, like the other XDG paths."""
     base = os.environ.get("XDG_RUNTIME_DIR")
     if WINDOWS and not base:
-        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-        return Path(base) / "multidrop" / "run"
+        return _windows_home() / "run"
     base = base or f"/tmp/multidrop-{os.getuid()}"
     return Path(base) / "multidrop"
 
@@ -55,6 +63,8 @@ def default_config_path() -> Path:
     env = os.environ.get("MULTIDROP_CONFIG")
     if env:
         return Path(env)
+    if WINDOWS and not os.environ.get("XDG_CONFIG_HOME"):
+        return _windows_home() / "config.toml"
     return _xdg("XDG_CONFIG_HOME", ".config") / "multidrop" / "config.toml"
 
 
@@ -138,17 +148,22 @@ class DaemonConfig:
     history_file: str = ""
 
     def history_path(self) -> Path:
-        return Path(self.history_file).expanduser() if self.history_file \
-            else _xdg("XDG_STATE_HOME", ".local/state") / "multidrop" / "history.jsonl"
+        if self.history_file:
+            return Path(self.history_file).expanduser()
+        if WINDOWS and not os.environ.get("XDG_STATE_HOME"):
+            return _windows_home() / "history.jsonl"
+        return _xdg("XDG_STATE_HOME", ".local/state") / "multidrop" / "history.jsonl"
 
 
 @dataclass
 class Config:
     alias: str = field(default_factory=socket.gethostname)
     download_dir: Path = field(
-        default_factory=lambda: Path.home() / "Downloads" / "multidrop")
+        default_factory=lambda: Path.home() / "Downloads" / (WINDOWS_DIR if WINDOWS else "multidrop"))
     state_dir: Path = field(
-        default_factory=lambda: _xdg("XDG_DATA_HOME", ".local/share") / "multidrop")
+        default_factory=lambda: _windows_home() / "state"
+        if WINDOWS and not os.environ.get("XDG_DATA_HOME")
+        else _xdg("XDG_DATA_HOME", ".local/share") / "multidrop")
     localsend: LocalSendConfig = field(default_factory=LocalSendConfig)
     quickshare: QuickShareConfig = field(default_factory=QuickShareConfig)
     prefer: list[str] = field(default_factory=lambda: list(DEFAULT_PREFER))

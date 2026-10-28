@@ -58,11 +58,12 @@ jobs:
           cd build/doubletake-src
           git -c advice.detachedHead=false checkout -q "$DOUBLETAKE_REV"
           git apply ../../packaging/windows/doubletake/windows-support.patch
+          git apply ../../packaging/windows/doubletake/beam-quality.patch
           CGO_ENABLED=0 go build -trimpath -o ../doubletake/ ./cmd/doubletake ./cmd/doubletake-ctl ./cmd/doubletake-test-receiver
           cp LICENSE COPYING.GPL ../doubletake/
       - name: doubletake's Windows-specific tests
         working-directory: build/doubletake-src
-        run: go test ./internal/daemon/... ./internal/airplay/ -run "TCP|ListenControl|Client|D3D11|Windows|HWAccel|EncoderSelection|RunRejectsSecond"
+        run: go test ./internal/daemon/... ./internal/airplay/ -run "TCP|ListenControl|Client|D3D11|Windows|HWAccel|EncoderSelection|RunRejectsSecond|Quality"
       - name: GStreamer runtime (checksum pinned)
         shell: pwsh
         run: |
@@ -115,11 +116,11 @@ jobs:
           name: mirror-windows
           path: build/mirror
       - run: pip install ".[windows]" pyinstaller
-      - name: Build MultiDrop.exe
+      - name: Build Beam.exe
         run: >
-          pyinstaller --noconfirm --onefile --windowed --name MultiDrop
-          --icon data/icons/multidrop.ico
-          --add-data "data/icons/multidrop.png;data/icons"
+          pyinstaller --noconfirm --onefile --windowed --name Beam
+          --icon data/icons/beam.ico
+          --add-data "data/icons/beam.png;data/icons"
           --collect-all multidrop --collect-all zeroconf --collect-all soundcard --collect-all webview
           --hidden-import pystray._win32
           packaging/windows/launch.py
@@ -127,17 +128,17 @@ jobs:
         shell: pwsh
         timeout-minutes: 3
         run: |
-          $p = Start-Process -FilePath dist\MultiDrop.exe -ArgumentList "--selftest" -PassThru
+          $p = Start-Process -FilePath dist\Beam.exe -ArgumentList "--selftest" -PassThru
           if (-not $p.WaitForExit(90000)) { $p.Kill(); $code = "timeout" } else { $code = $p.ExitCode }
-          Get-Content "$env:LOCALAPPDATA\multidrop\multidrop.log" -ErrorAction SilentlyContinue
+          Get-Content "$env:LOCALAPPDATA\Beam\beam.log" -ErrorAction SilentlyContinue
           if ($code -ne 0) { throw "self-test failed: $code" }
-      - name: Build MultiDrop-Setup.exe (Inno Setup, per-user install)
+      - name: Build Beam-Setup.exe (Inno Setup, per-user install)
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
           $version = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
-          & $iscc /Q "/DAppVersion=$version" packaging\windows\multidrop.iss
+          & $iscc /Q "/DAppVersion=$version" packaging\windows\beam.iss
           if ($LASTEXITCODE) { throw "iscc failed: $LASTEXITCODE" }
       - name: Install, check and uninstall
         shell: pwsh
@@ -145,143 +146,25 @@ jobs:
         run: packaging/windows/test-installer.ps1
       - uses: actions/upload-artifact@v7
         with:
-          name: MultiDrop-windows
+          name: Beam-windows
           path: |
-            dist/MultiDrop.exe
-            dist/MultiDrop-Setup.exe
-
-  deb:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build multidrop_*_all.deb
-        run: packaging/deb/build-deb.sh dist
-      - name: Install it and check the programs start
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ./dist/multidrop_*_all.deb
-          multidrop --version
-          multidropd --help >/dev/null
-          python3 -I -c "import sys; sys.path[:0]=['/usr/lib/multidrop','/usr/lib/multidrop/vendor']; import multidrop.daemon, aiohttp, google.protobuf; print('aiohttp', aiohttp.__version__)"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: MultiDrop-deb
-          path: dist/*.deb
+            dist/Beam.exe
+            dist/Beam-Setup.exe
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test-linux, test-windows, windows, deb]
+    needs: [test-linux, test-windows, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - run: pip install build && python -m build
       - uses: actions/download-artifact@v8
         with:
-          name: MultiDrop-deb
+          name: Beam-windows
           path: dist
-      - uses: actions/download-artifact@v8
-        with:
-          name: MultiDrop-windows
-          path: dist
-      - name: Linux bundle
-        run: |
-          name=MultiDrop-linux-${GITHUB_REF_NAME}
-          git archive --format=tar.gz --prefix="$name/" -o "dist/$name.tar.gz" HEAD
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create "$GITHUB_REF_NAME" dist/*
-          --title "MultiDrop $GITHUB_REF_NAME"
+          --title "Beam $GITHUB_REF_NAME"
           --notes-file packaging/RELEASE_NOTES.md
-
-  pages:
-    # Website on GitHub Pages (gh-pages branch, next to the APT repository),
-    # built from site/strings.toml by tools/build_site.py. The branch is
-    # checked out to gh-pages/, as site/ holds the sources.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test-linux]
-    runs-on: ubuntu-latest
-    concurrency: gh-pages
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          ref: gh-pages
-          path: gh-pages
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - run: python tools/build_site.py build/site
-      - name: Publish
-        run: |
-          cp -r build/site/. gh-pages/
-          cd gh-pages
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || { git commit -m "Website: ${GITHUB_SHA::7}" && git push; }
-
-  web:
-    # Browser edition (pages/) on GitHub Pages under web/, next to the website and
-    # the APT repository. Only the page files and wireweave's src/ are copied.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [pages]
-    runs-on: ubuntu-latest
-    concurrency: gh-pages
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-      - uses: actions/checkout@v7
-        with:
-          ref: gh-pages
-          path: gh-pages
-      - name: Publish
-        run: |
-          rm -rf gh-pages/web && mkdir -p gh-pages/web/vendor/wireweave
-          cp pages/index.html pages/*.js pages/style.css pages/manifest.webmanifest gh-pages/web/
-          cp -r pages/icons gh-pages/web/
-          cp -r pages/vendor/wireweave/src gh-pages/web/vendor/wireweave/
-          cd gh-pages
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || { git commit -m "Web edition: ${GITHUB_SHA::7}" && git push; }
-
-  apt-repo:
-    # Signed APT repository on GitHub Pages (gh-pages branch):
-    #   sudo apt install multidrop   after adding it once, see README.
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [release]
-    runs-on: ubuntu-24.04
-    concurrency: gh-pages
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          ref: gh-pages
-          path: gh-pages
-      - uses: actions/download-artifact@v8
-        with:
-          name: MultiDrop-deb
-          path: dist
-      - name: Update and sign the repository
-        env:
-          APT_GPG_KEY: ${{ secrets.APT_GPG_KEY }}
-          APT_KEY_ID: ${{ secrets.APT_KEY_ID }}
-        run: |
-          export GNUPGHOME=$(mktemp -d)
-          echo "$APT_GPG_KEY" | gpg --batch --import
-          packaging/deb/update-apt-repo.sh gh-pages dist/*.deb
-      - name: Publish
-        run: |
-          cd gh-pages
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "APT repository: ${GITHUB_REF_NAME}"
-          git push

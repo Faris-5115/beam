@@ -13,7 +13,7 @@ def test_runtime_dir_on_windows(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "WINDOWS", True)
     monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    assert config.runtime_dir() == tmp_path / "multidrop" / "run"
+    assert config.runtime_dir() == tmp_path / "Beam" / "run"
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "xdg"))
     assert config.runtime_dir() == tmp_path / "xdg" / "multidrop"
 
@@ -95,7 +95,7 @@ def test_cli_output_is_utf8(monkeypatch):
 
 
 def test_second_start_hands_over_files(tmp_path, monkeypatch, make_config):
-    """`MultiDrop.exe FILE` (Explorer's "Send to") while MultiDrop runs."""
+    """`Beam.exe FILE` (Explorer's "Send to") while Beam runs."""
     from multidrop import windows
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "rt"))
     monkeypatch.setenv("MULTIDROP_CONFIG", str(tmp_path / "none.toml"))
@@ -166,7 +166,7 @@ def test_autostart_and_send_to(tmp_path, monkeypatch):
         winshell.set_autostart(True)
         assert winshell.autostart_enabled()
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, winshell.RUN_KEY) as key:
-            command = winreg.QueryValueEx(key, "MultiDrop")[0]
+            command = winreg.QueryValueEx(key, "Beam")[0]
         assert "multidrop.windows" in command and command.endswith("--no-browser")
         winshell.set_autostart(False)
         winshell.set_autostart(False)       # already off: no error
@@ -176,7 +176,7 @@ def test_autostart_and_send_to(tmp_path, monkeypatch):
         winreg.DeleteKey(winreg.HKEY_CURRENT_USER, r"Software\MultiDropTest")
 
     winshell.set_sendto(True)
-    assert winshell.sendto_link() == tmp_path / "Microsoft/Windows/SendTo/MultiDrop.lnk"
+    assert winshell.sendto_link() == tmp_path / "Microsoft/Windows/SendTo/Beam.lnk"
     assert winshell.sendto_enabled() and winshell.sendto_link().stat().st_size > 0
     winshell.set_sendto(False)
     assert not winshell.sendto_enabled()
@@ -232,7 +232,7 @@ def test_desktop_api_speakers(tmp_path):
 def test_firewall_rule_any_network_local_devices_only():
     from multidrop import winshell
     *deletes, tcp, udp = winshell.firewall_commands([53320, 53317, 53317], [5353])
-    assert [d[-1] for d in deletes] == ["name=MultiDrop (local network)", "name=MultiDrop"]
+    assert [d[-1] for d in deletes] == ["name=Beam (local network)", "name=Beam"]
     for rule in (tcp, udp):
         # Most Wi-Fis count as "public" on Windows; the subnet keeps the internet out.
         assert "profile=any" in rule and "remoteip=localsubnet" in rule and "dir=in" in rule
@@ -277,7 +277,7 @@ def test_network_access_asks_only_once(monkeypatch, make_config):
 
 
 def test_webview2_failure_closes_the_empty_window(monkeypatch):
-    """pywebview only logs a failed WebView2 start; MultiDrop must not stay a white window."""
+    """pywebview only logs a failed WebView2 start; Beam must not stay a white window."""
     import logging
 
     from multidrop import win_window

@@ -1,9 +1,9 @@
-"""MultiDrop's own window on Windows: the web UI in Edge WebView2 (pywebview),
+"""Beam's own window on Windows: the web UI in Edge WebView2 (pywebview),
 plus what only the desktop can do, offered to the page as
 `window.pywebview.api`: Windows integration settings, AirPlay audio, AirPlay
 screen mirroring and the one-time welcome.
 
-Closing the window keeps MultiDrop running in the tray, so phones can still
+Closing the window keeps Beam running in the tray, so phones can still
 send files; "Quit" in the tray menu ends it.
 """
 
@@ -19,7 +19,7 @@ from multidrop import winshell
 
 log = logging.getLogger(__name__)
 
-TITLE = "MultiDrop"
+TITLE = "Beam"
 
 
 class DesktopApi:
@@ -152,7 +152,7 @@ class AppWindow:
         if self.quitting:
             return True
         self.window.hide()                  # keep receiving in the background
-        log.info("window closed: hidden, MultiDrop keeps running")
+        log.info("window closed: hidden, Beam keeps running")
         if not self._hidden_once:
             self._hidden_once = True
             try:

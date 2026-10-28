@@ -1,4 +1,4 @@
-"""PyInstaller entry point for MultiDrop.exe (see .github/workflows/build.yml)."""
+"""PyInstaller entry point for Beam.exe (see .github/workflows/build.yml)."""
 import sys
 
 from multidrop.windows import main

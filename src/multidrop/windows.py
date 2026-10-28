@@ -1,4 +1,4 @@
-"""MultiDrop for Windows: background service, tray icon, UI in the browser.
+"""Beam for Windows: background service, tray icon, UI in the browser.
 
 Quick Share and LocalSend work as on Linux; the tray menu plays the PC's
 audio on AirPlay speakers (win_audio.py) and the window mirrors the screen to
@@ -6,11 +6,11 @@ an Apple TV (win_mirror.py, doubletake's Windows build). AirDrop needs Apple's
 AWDL radio link, which Windows Wi-Fi drivers cannot provide, so it is not part
 of the Windows build.
 
-Built into MultiDrop.exe by GitHub Actions (.github/workflows/build.yml).
-`MultiDrop.exe FILE...` (Explorer's "Send to") hands the files to the running
+Built into Beam.exe by GitHub Actions (.github/workflows/build.yml).
+`Beam.exe FILE...` (Explorer's "Send to") hands the files to the running
 instance and shows them in the UI to pick a device.
-`MultiDrop.exe --selftest` starts the service, checks its API and exits.
-`MultiDrop.exe --allow-network` (run elevated by the installer, else asked for
+`Beam.exe --selftest` starts the service, checks its API and exits.
+`Beam.exe --allow-network` (run elevated by the installer, else asked for
 once on first start) lets phones on the local network through the Windows
 Firewall, see winshell.py.
 """
@@ -35,7 +35,7 @@ from multidrop import daemon, winshell
 from multidrop.config import Config, runtime_dir
 from multidrop.daemon.api import TOKEN_HEADER
 
-APP_NAME = "MultiDrop"
+APP_NAME = "Beam"
 log = logging.getLogger("multidrop.windows")
 
 
@@ -95,7 +95,7 @@ class Service:
         if self.error is not None:
             raise self.error
         if not self.url:
-            raise TimeoutError("MultiDrop service did not start")
+            raise TimeoutError("Beam service did not start")
         return self.url
 
     def stop(self) -> None:
@@ -108,7 +108,7 @@ class Service:
 
 
 def _watch_events(service: Service, notify, show) -> None:
-    """Bring MultiDrop to the front when someone wants to send (with a Windows
+    """Bring Beam to the front when someone wants to send (with a Windows
     notification; Accept/Decline notifications exist only on Linux), when
     files are handed over and when it is started a second time."""
     last = None                         # events before the start (history file) are old news
@@ -136,7 +136,7 @@ def _watch_events(service: Service, notify, show) -> None:
 
 
 class NetworkAccess:
-    """Firewall rules for MultiDrop's ports, asked for once automatically and
+    """Firewall rules for Beam's ports, asked for once automatically and
     afterwards from the notice in the window."""
 
     MDNS = 5353
@@ -173,7 +173,7 @@ class NetworkAccess:
 
 def _exit(code: int) -> None:
     """Leave even if a library thread (zeroconf, executor) is still blocked:
-    a lingering thread kept MultiDrop.exe alive after quitting."""
+    a lingering thread kept Beam.exe alive after quitting."""
     logging.shutdown()
     if sys.stdout is not None:
         sys.stdout.flush()
@@ -189,7 +189,7 @@ def _selftest(service: Service) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="MultiDrop", description=__doc__.splitlines()[0])
+    p = argparse.ArgumentParser(prog="Beam", description=__doc__.splitlines()[0])
     p.add_argument("--config", help="config file")
     p.add_argument("--no-browser", action="store_true",
                    help="start in the background, without showing the window")
@@ -209,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
 
     log_dir = runtime_dir().parent
     log_dir.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(filename=str(log_dir / "multidrop.log"),
+    logging.basicConfig(filename=str(log_dir / "beam.log"),
                         level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     # One line per UI request would grow the log all day (the window polls).
@@ -330,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
                 icon.notify(f"Could not change \"{item.text}\"", APP_NAME)
         return action
 
-    icon = pystray.Icon(APP_NAME, Image.open(_resource("multidrop.png")), APP_NAME,
+    icon = pystray.Icon(APP_NAME, Image.open(_resource("beam.png")), APP_NAME,
                         menu=pystray.Menu(
                             pystray.MenuItem(f"Open {APP_NAME}", open_ui, default=True),
                             pystray.MenuItem("Received files", open_downloads),
@@ -374,7 +374,7 @@ def main(argv: list[str] | None = None) -> int:
                 webbrowser.open(url)
         if not quitting.is_set():
             # The window ended without "Quit": keep receiving, UI in the browser.
-            log.warning("app window ended unexpectedly; MultiDrop keeps running in the tray")
+            log.warning("app window ended unexpectedly; Beam keeps running in the tray")
             window = None
         quitting.wait()
     if audio is not None:

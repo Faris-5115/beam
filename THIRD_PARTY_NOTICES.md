@@ -1,7 +1,24 @@
 # Third-party notices
 
-MultiDrop is licensed under GPL-3.0-or-later (see [LICENSE](LICENSE)). It
-contains or builds on the following third-party work.
+Beam is licensed under GPL-3.0-or-later (see [LICENSE](LICENSE)).
+
+## MultiDrop (GPL-3.0-or-later) – the base of Beam
+
+Beam is a fork of [MultiDrop](https://github.com/digitaldanis/multidrop) by
+digitaldanis, imported at commit 60119f5 (version 0.2.1). Nearly all protocol,
+service and Windows integration code is MultiDrop's. Beam's changes are its
+user interface, AirPlay picture-quality presets and its name. The first commit
+of this repository is MultiDrop's unmodified source, so `git diff` against it
+shows exactly what Beam changes.
+
+## doubletake (LGPL-3.0) – AirPlay screen mirroring
+
+Beam's installer bundles [doubletake](https://github.com/omarroth/doubletake),
+built in CI from the pinned upstream tag with MultiDrop's Windows patch and
+Beam's `packaging/windows/doubletake/beam-quality.patch` applied. Both patches
+are in this repository.
+
+MultiDrop's own notices follow.
 
 ## Included in this repository
 

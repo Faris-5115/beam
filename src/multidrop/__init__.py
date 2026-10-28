@@ -1,3 +1,4 @@
-"""multidrop: nearby file sharing for Linux (LocalSend, Quick Share, AirDrop)."""
+"""Beam (a fork of MultiDrop): nearby file sharing and AirPlay for Windows.
+The package keeps the name multidrop to stay close to upstream."""
 
-__version__ = "0.2.1"
+__version__ = "1.0.0"

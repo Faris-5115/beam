@@ -1,26 +1,26 @@
-# Installs MultiDrop-Setup.exe silently for the current user, checks the
+# Installs Beam-Setup.exe silently for the current user, checks the
 # install (files, shortcuts, autostart, self-test) and that uninstalling
 # removes all of it. Used by CI; leaves the profile as it was.
-param([string]$Setup = "dist\MultiDrop-Setup.exe")
+param([string]$Setup = "dist\Beam-Setup.exe")
 $ErrorActionPreference = "Stop"
 
-$app = "$env:LOCALAPPDATA\Programs\MultiDrop"
-$exe = "$app\MultiDrop.exe"
-$sendTo = "$env:APPDATA\Microsoft\Windows\SendTo\MultiDrop.lnk"
-$startMenu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\MultiDrop.lnk"
+$app = "$env:LOCALAPPDATA\Programs\Beam"
+$exe = "$app\Beam.exe"
+$sendTo = "$env:APPDATA\Microsoft\Windows\SendTo\Beam.lnk"
+$startMenu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Beam.lnk"
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 
 function Check($ok, $what) {
     if (-not $ok) { throw "FAIL: $what" }
     Write-Host "ok  $what"
 }
-function RunValue { (Get-ItemProperty $runKey -ErrorAction SilentlyContinue).MultiDrop }
+function RunValue { (Get-ItemProperty $runKey -ErrorAction SilentlyContinue).Beam }
 
-if ((Test-Path $app) -or (RunValue)) { throw "MultiDrop is already installed here; not touching it" }
+if ((Test-Path $app) -or (RunValue)) { throw "Beam is already installed here; not touching it" }
 
 $p = Start-Process $Setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/TASKS=sendto,autostart" -Wait -PassThru
 Check ($p.ExitCode -eq 0) "setup exit code 0"
-Check (Test-Path $exe) "MultiDrop.exe installed"
+Check (Test-Path $exe) "Beam.exe installed"
 Check (Test-Path "$app\mirror\doubletake.exe") "screen mirroring engine installed"
 Check (Test-Path "$app\mirror\gstreamer\lib\gstreamer-1.0\gstd3d11.dll") "its GStreamer with d3d11 capture"
 Check (Test-Path $startMenu) "Start menu shortcut"
