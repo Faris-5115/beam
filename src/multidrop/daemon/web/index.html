@@ -4,176 +4,299 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>MultiDrop</title>
+<meta name="color-scheme" content="light dark">
+<title>Beam</title>
 <link rel="stylesheet" href="style.css">
 <script src="app.js" defer></script>
 </head>
 <body>
-<header>
-  <h1>MultiDrop</h1>
-  <div id="status">connecting …</div>
-</header>
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-nearby" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 20.5h7M12 16.5v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19.5h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10.5 18.5h3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4.5" y="2.5" width="15" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="18.6" r=".9" fill="currentColor"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="10.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M2.5 18.5h19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-pc" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9 20.5h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14 14h2.5v2.5H14zM17.5 17.5H20V20h-2.5zM14 18.5h2v1.5h-2zM18.5 14H20v2h-1.5z" fill="currentColor"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m6 12.5 4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
 
-<p id="notoken" class="warn" hidden>
-  No access token in the address. Open the interface with
-  <code>multidrop ui --open</code> (the URL is also in
-  <code>$XDG_RUNTIME_DIR/multidrop/url</code>).
-</p>
-
-<main>
-  <section id="network" class="card warn" hidden>
-    <h2>Phones can’t reach this PC yet</h2>
-    <p>The Windows Firewall blocks phones from connecting. MultiDrop can allow devices on your
-      local network – nothing from the internet. Windows asks once for permission: choose <b>Yes</b>.</p>
-    <button type="button" class="primary" id="network-allow">Let phones connect</button>
-    <p class="meta" id="network-status"></p>
-  </section>
-
-  <section id="welcome" class="card welcome" hidden>
-    <h2>Welcome to MultiDrop</h2>
-    <p>Phones and computers nearby can now send files to this PC – and you can send to them.</p>
-    <ul>
-      <li><b>Android or Samsung phone:</b> tap Share → Quick Share and pick <b class="alias"></b>.</li>
-      <li><b>iPhone:</b> use the free LocalSend app. “Download in the browser” below needs no app,
-        but Safari on many iPhones refuses it on a home network.</li>
-      <li><b>From this PC:</b> drag files onto a device below, or right-click files in Explorer → Send to → MultiDrop.</li>
+<div class="app">
+  <nav class="sidebar" aria-label="Sections">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>Beam</span>
+    </div>
+    <ul class="nav">
+      <li><button type="button" data-pane="nearby" class="nav-item"><svg><use href="#i-nearby"/></svg>Nearby</button></li>
+      <li><button type="button" data-pane="screen" class="nav-item" hidden><svg><use href="#i-screen"/></svg>Screen Mirroring</button></li>
+      <li><button type="button" data-pane="sound" class="nav-item" hidden><svg><use href="#i-sound"/></svg>Sound</button></li>
+      <li><button type="button" data-pane="link" class="nav-item"><svg><use href="#i-link"/></svg>Download Link</button></li>
+      <li><button type="button" data-pane="activity" class="nav-item"><svg><use href="#i-activity"/></svg>Activity<span class="count" id="activity-count" hidden></span></button></li>
+      <li><button type="button" data-pane="settings" class="nav-item" hidden><svg><use href="#i-settings"/></svg>Settings</button></li>
     </ul>
-    <p class="hint">Windows asks once whether MultiDrop may make changes: choose <b>Yes</b>,
-      so phones on your Wi-Fi can reach this PC.
-      Closing this window keeps MultiDrop running in the notification area, so you can still receive.</p>
-    <button type="button" class="primary" id="welcome-ok">Got it</button>
-  </section>
+    <div class="identity">
+      <span class="dot" id="status-dot"></span>
+      <div>
+        <div id="status">Connecting…</div>
+        <div class="caption" id="status-detail"></div>
+      </div>
+    </div>
+  </nav>
 
-  <section id="offers-section" hidden>
-    <h2>Incoming</h2>
+  <main class="content">
+    <p id="notoken" class="banner bad" hidden>
+      No access token in the address. Open the interface with
+      <code>multidrop ui --open</code>.
+    </p>
+
+    <div id="network" class="banner warn" hidden>
+      <div>
+        <strong>Phones can’t reach this PC yet.</strong>
+        Windows Firewall is blocking them. Beam can let in devices on your local network only, never the internet.
+        <span class="caption" id="network-status"></span>
+      </div>
+      <button type="button" class="btn primary" id="network-allow">Allow on local network</button>
+    </div>
+
+    <!-- Nearby -->
+    <section class="pane" data-pane="nearby">
+      <header class="pane-head">
+        <div>
+          <h1>Nearby</h1>
+          <p class="sub">Drop files on a device, or click it to choose files.</p>
+        </div>
+        <button id="refresh" type="button" class="btn">Search</button>
+      </header>
+
+      <div id="selection-section" class="banner info" hidden>
+        <div>
+          <strong id="selection-title">Ready to send</strong>
+          <span class="caption">Click a device, the QR code or a download link to send.</span>
+          <ul id="selection" class="chips"></ul>
+        </div>
+        <button id="selection-clear" type="button" class="btn">Clear</button>
+      </div>
+
+      <div class="radar" id="radar">
+        <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+        <div class="pulse" aria-hidden="true"></div>
+        <div class="me" aria-hidden="true"><svg><use href="#i-pc"/></svg></div>
+        <div id="devices" class="orbit"></div>
+        <p class="radar-empty" id="devices-empty" hidden>Looking for phones and computers… Unlock them and open Quick Share or LocalSend.</p>
+      </div>
+
+      <h2 class="group-title">More ways to send</h2>
+      <div class="group">
+        <div class="row drop" id="qr-card" data-qr="1" tabindex="0">
+          <span class="row-icon blue"><svg><use href="#i-qr"/></svg></span>
+          <div class="row-body">
+            <div class="row-title">Quick Share QR code</div>
+            <div class="caption">For an Android phone that doesn’t show up: drop files here, then scan the code.</div>
+            <div id="qr" class="qr"></div>
+          </div>
+        </div>
+        <form id="text-form" class="row">
+          <span class="row-icon gray"><svg><use href="#i-text"/></svg></span>
+          <div class="row-body stack">
+            <div class="row-title">Text or link</div>
+            <textarea id="text" rows="2" placeholder="Type text or paste a link" required></textarea>
+            <div class="inline">
+              <select id="text-target" aria-label="Send to"></select>
+              <button type="submit" class="btn primary">Send</button>
+            </div>
+          </div>
+        </form>
+      </div>
+      <details class="group disclosure">
+        <summary>Add a device by its address</summary>
+        <form id="manual" class="inline pad">
+          <input id="manual-address" placeholder="192.168.1.23 or 192.168.1.23:53318" required>
+          <select id="manual-protocol" aria-label="Protocol">
+            <option value="quickshare">Quick Share</option>
+            <option value="localsend">LocalSend</option>
+          </select>
+          <button type="submit" class="btn">Add</button>
+        </form>
+      </details>
+    </section>
+
+    <!-- Screen mirroring -->
+    <section class="pane" data-pane="screen" id="desktop-mirror" hidden>
+      <header class="pane-head">
+        <div>
+          <h1>Screen Mirroring</h1>
+          <p class="sub">Show this PC on an Apple TV, a Mac or an AirPlay TV. Sound plays on the TV too.</p>
+        </div>
+      </header>
+      <div class="group">
+        <div class="row">
+          <span class="row-icon blue"><svg><use href="#i-screen"/></svg></span>
+          <div class="row-body inline">
+            <select id="screen" aria-label="TV" class="grow"></select>
+            <button type="button" class="btn primary" id="mirror-start">Mirror</button>
+          </div>
+        </div>
+        <ul id="mirror-streams" class="rows"></ul>
+        <form id="mirror-pin" class="row" hidden>
+          <div class="row-body inline">
+            <label for="mirror-code" id="mirror-pin-label" class="grow"></label>
+            <input id="mirror-code" autocomplete="off" required class="code">
+            <button type="submit" class="btn primary">Connect</button>
+          </div>
+        </form>
+      </div>
+      <p class="caption status-line" id="mirror-status"></p>
+
+      <h2 class="group-title">Picture quality</h2>
+      <div class="group">
+        <div class="row">
+          <div class="row-body stack">
+            <div class="segmented" id="mirror-quality" role="radiogroup" aria-label="Picture quality"></div>
+            <div class="caption" id="mirror-quality-detail"></div>
+          </div>
+        </div>
+      </div>
+      <p class="caption footnote">A new quality setting applies the next time you start mirroring.
+        Maximum uses 4K only when both the TV and an NVIDIA graphics card support it. Otherwise it uses High.</p>
+    </section>
+
+    <!-- Sound -->
+    <section class="pane" data-pane="sound" id="desktop-audio" hidden>
+      <header class="pane-head">
+        <div>
+          <h1>Sound</h1>
+          <p class="sub">Play this PC’s sound on an AirPlay speaker or TV. The speaker plays about two seconds behind.</p>
+        </div>
+        <button type="button" class="btn" id="speaker-search">Search</button>
+      </header>
+      <div class="group">
+        <div class="row">
+          <span class="row-icon pink"><svg><use href="#i-sound"/></svg></span>
+          <div class="row-body inline">
+            <select id="speaker" aria-label="Speaker" class="grow"></select>
+            <button type="button" class="btn primary" id="speaker-play">Play</button>
+            <button type="button" class="btn" id="speaker-stop" hidden>Stop</button>
+          </div>
+        </div>
+        <label class="row">
+          <div class="row-body inline">
+            <span class="row-title">Volume</span>
+            <input type="range" id="speaker-volume" min="0" max="100" step="5" class="grow">
+          </div>
+        </label>
+      </div>
+      <p class="caption status-line" id="speaker-status"></p>
+    </section>
+
+    <!-- Browser download link -->
+    <section class="pane" data-pane="link">
+      <header class="pane-head">
+        <div>
+          <h1>Download Link</h1>
+          <p class="sub">No app needed: a device on the same Wi-Fi scans a code and downloads in its browser.</p>
+        </div>
+      </header>
+      <div class="dropzone drop" id="share-card" tabindex="0">
+        <svg class="dz-icon"><use href="#i-link"/></svg>
+        <div class="row-title">Drop files here, or click to choose</div>
+        <div class="caption">The link stays open until you stop it or the time runs out.</div>
+      </div>
+      <div class="group">
+        <label class="row"><div class="row-body inline">
+          <span class="row-title grow">Stay open for</span>
+          <select id="share-minutes" data-stop="1">
+            <option value="5">5 minutes</option><option value="15" selected>15 minutes</option>
+            <option value="60">1 hour</option></select>
+        </div></label>
+        <label class="row"><div class="row-body inline">
+          <span class="grow"><span class="row-title">Require a PIN</span>
+            <span class="caption block">Off: anyone with the link can download.</span></span>
+          <input type="checkbox" class="switch" id="share-pin-on" data-stop="1" checked>
+        </div></label>
+        <label class="row"><div class="row-body inline">
+          <span class="grow"><span class="row-title">Secure link (https)</span>
+            <span class="caption block">For browsers that refuse plain http. They warn once about the certificate.</span></span>
+          <input type="checkbox" class="switch" id="share-https" data-stop="1">
+        </div></label>
+      </div>
+      <p class="caption footnote">iPhone: if Safari refuses the link on your home network, use the free LocalSend app instead.</p>
+
+      <div id="share" class="group share" hidden>
+        <p class="banner warn" id="share-hotspot" hidden>This PC is on an iPhone’s hotspot. That iPhone can’t open the link, but other phones on the hotspot can.</p>
+        <div class="share-body">
+          <div id="share-qr" class="qr"></div>
+          <div class="stack">
+            <a id="share-url" target="_blank" rel="noreferrer"></a>
+            <div id="share-pin-row">PIN <span id="share-pin" class="pin"></span></div>
+            <p class="caption" id="share-tls-hint">The browser warns once that the connection isn’t private. Continue anyway; the link is still encrypted.</p>
+            <p class="caption" id="share-info"></p>
+            <div><button type="button" id="share-stop" class="btn danger">Stop sharing</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Activity -->
+    <section class="pane" data-pane="activity">
+      <header class="pane-head"><div><h1>Activity</h1></div></header>
+      <h2 class="group-title">Transfers</h2>
+      <div id="jobs" class="group"></div>
+      <h2 class="group-title">History</h2>
+      <ol id="log" class="group log" reversed></ol>
+    </section>
+
+    <!-- Settings -->
+    <section class="pane" data-pane="settings" id="desktop-settings" hidden>
+      <header class="pane-head"><div><h1>Settings</h1></div></header>
+      <div class="group">
+        <label class="row"><div class="row-body inline">
+          <span class="grow"><span class="row-title">Open at sign-in</span>
+            <span class="caption block">Recommended, so phones can always reach you.</span></span>
+          <input type="checkbox" class="switch" id="set-autostart">
+        </div></label>
+        <label class="row"><div class="row-body inline">
+          <span class="grow"><span class="row-title">Show Beam in “Send to”</span>
+            <span class="caption block">Right-click files in Explorer, then Send to → Beam.</span></span>
+          <input type="checkbox" class="switch" id="set-sendto">
+        </div></label>
+        <div class="row"><div class="row-body inline">
+          <span class="row-title grow">Received files</span>
+          <button type="button" class="btn" id="open-downloads">Open folder</button>
+        </div></div>
+      </div>
+      <p class="caption footnote">Beam is free software (GPL-3.0), built on <a href="https://github.com/digitaldanis/multidrop" target="_blank" rel="noreferrer">MultiDrop</a> and <a href="https://github.com/omarroth/doubletake" target="_blank" rel="noreferrer">doubletake</a>.</p>
+    </section>
+  </main>
+</div>
+
+<!-- Incoming: a sheet over everything -->
+<div class="sheet-backdrop" id="offers-section" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="offers-title">
+    <h2 id="offers-title" class="sheet-title">Incoming</h2>
     <div id="offers"></div>
-  </section>
+  </div>
+</div>
 
-  <section id="selection-section" hidden>
-    <div class="row">
-      <h2>Ready to send</h2>
-      <button id="selection-clear" type="button">Clear</button>
-    </div>
-    <p class="hint">Click a device, the QR code or the browser download to send these.</p>
-    <ul id="selection" class="card files"></ul>
-  </section>
-
-  <section>
-    <div class="row">
-      <h2>Devices</h2>
-      <button id="refresh" type="button">Search</button>
-    </div>
-    <p class="hint">Drop files or folders on a device – or click it and choose.</p>
-    <div id="devices" class="grid"></div>
-    <div class="card drop" id="qr-card" data-qr="1">
-      <div class="name">Via QR code (Quick Share)</div>
-      <div class="meta">For Android/Samsung when the phone does not show up in the list: drop files here, then scan the code with the phone.</div>
-      <div id="qr"></div>
-    </div>
-    <details>
-      <summary>Device by address</summary>
-      <form id="manual" class="row">
-        <input id="manual-address" placeholder="192.168.1.23 or 192.168.1.23:53318" required>
-        <select id="manual-protocol">
-          <option value="quickshare">Quick Share</option>
-          <option value="localsend">LocalSend</option>
-        </select>
-        <button type="submit">Add</button>
-      </form>
-    </details>
-  </section>
-
-  <section>
-    <h2>No app needed: download in the browser</h2>
-    <p class="hint">For any device without Quick Share/LocalSend: drop files here.
-      A device on the same Wi-Fi scans the code and downloads in its browser (LocalSend download, with PIN).
-      Runs until “Stop” or until the time is up.</p>
-    <p class="hint"><b>iPhone:</b> if Safari says “HTTPS-Only” or “network connection lost”,
-      it refuses local addresses; use the free LocalSend app instead.</p>
-    <div class="card drop" id="share-card">
-      <div class="name">Offer files for download</div>
-      <div class="row meta">
-        <label>Duration <select id="share-minutes" data-stop="1">
-          <option value="5">5 min</option><option value="15" selected>15 min</option>
-          <option value="60">60 min</option></select></label>
-        <label><input type="checkbox" id="share-nopin" data-stop="1"> without PIN (secret link only)</label>
-        <label title="For browsers that refuse plain http. They warn once about the certificate. iPhones may refuse it on a local network; use LocalSend there."><input type="checkbox" id="share-https" data-stop="1"> secure link (https)</label>
-      </div>
-    </div>
-    <div id="share" class="card" hidden>
-      <p class="notice" id="share-hotspot" hidden>This PC is on an iPhone’s hotspot. That iPhone
-        itself cannot open the link – other phones in the hotspot can. To get the files onto the
-        hotspot iPhone, connect both to a normal Wi-Fi.</p>
-      <div id="share-qr"></div>
-      <p><a id="share-url" target="_blank" rel="noreferrer"></a></p>
-      <p id="share-pin-row">PIN: <span id="share-pin" class="pin"></span></p>
-      <p class="meta" id="share-tls-hint">The browser warns once that the connection is not private:
-        continue anyway, the link is still encrypted. iPhones may refuse it without a way to
-        continue; use the free LocalSend app there.</p>
-      <p class="meta" id="share-info"></p>
-      <button type="button" id="share-stop" class="danger">Stop</button>
-    </div>
-  </section>
-
-  <section>
-    <h2>Send text or a link</h2>
-    <form id="text-form">
-      <textarea id="text" rows="2" placeholder="Text or https://…" required></textarea>
-      <div class="row">
-        <select id="text-target"></select>
-        <button type="submit">Send</button>
-      </div>
-    </form>
-  </section>
-
-  <section>
-    <h2>Transfers</h2>
-    <div id="jobs"></div>
-  </section>
-
-  <section id="desktop-mirror" hidden>
-    <h2>Show this PC’s screen on a TV</h2>
-    <p class="hint">AirPlay screen mirroring to an Apple TV, a Mac or an AirPlay TV on your Wi-Fi.
-      The PC’s sound plays on the TV too.</p>
-    <div class="row">
-      <select id="screen" aria-label="TV"></select>
-      <button type="button" class="primary" id="mirror-start">Mirror</button>
-    </div>
-    <ul id="mirror-streams"></ul>
-    <form id="mirror-pin" class="row" hidden>
-      <label for="mirror-code" id="mirror-pin-label"></label>
-      <input id="mirror-code" autocomplete="off" required>
-      <button type="submit" class="primary">Connect</button>
-    </form>
-    <p class="meta" id="mirror-status"></p>
-  </section>
-
-  <section id="desktop-audio" hidden>
-    <h2>Play this PC’s sound on a speaker</h2>
-    <p class="hint">AirPlay speakers and TVs on your Wi-Fi (Apple TV, HomePod, Sonos …).
-      The PC’s own speakers keep playing; the speaker is about 2 seconds behind.</p>
-    <div class="row">
-      <select id="speaker" aria-label="Speaker"></select>
-      <button type="button" class="primary" id="speaker-play">Play</button>
-      <button type="button" id="speaker-stop" hidden>Stop</button>
-      <button type="button" id="speaker-search">Search again</button>
-    </div>
-    <label class="row">Volume <input type="range" id="speaker-volume" min="0" max="100" step="5"></label>
-    <p class="meta" id="speaker-status"></p>
-  </section>
-
-  <section id="desktop-settings" hidden>
-    <h2>Settings</h2>
-    <p><label><input type="checkbox" id="set-autostart"> Start MultiDrop when I sign in to Windows (recommended, so phones can always reach you)</label></p>
-    <p><label><input type="checkbox" id="set-sendto"> Show “MultiDrop” when I right-click files → Send to</label></p>
-    <p><button type="button" id="open-downloads">Open received files</button></p>
-  </section>
-
-  <section>
-    <h2>History</h2>
-    <ol id="log" reversed></ol>
-  </section>
-</main>
+<div class="sheet-backdrop" id="welcome" hidden>
+  <div class="sheet welcome" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+    <span class="brand-mark big" aria-hidden="true"></span>
+    <h2 id="welcome-title" class="sheet-title">Welcome to Beam</h2>
+    <p>Phones and computers nearby can now send files to this PC, and you can send to them.</p>
+    <dl class="howto">
+      <dt>Android or Samsung</dt><dd>Share → Quick Share, then pick <b class="alias"></b>.</dd>
+      <dt>iPhone</dt><dd>Use the free LocalSend app.</dd>
+      <dt>From this PC</dt><dd>Drop files on a device, or right-click them in Explorer → Send to → Beam.</dd>
+    </dl>
+    <p class="caption">If Windows asks whether Beam may make changes, choose Yes so phones on your Wi-Fi can reach this PC. Closing the window keeps Beam running in the notification area.</p>
+    <button type="button" class="btn primary wide" id="welcome-ok">Get started</button>
+  </div>
+</div>
 
 <input type="file" id="pick-files" multiple hidden>
 </body>
