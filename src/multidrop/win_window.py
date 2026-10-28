@@ -106,6 +106,13 @@ class DesktopApi:
         self._mirror.stop(str(ip) if ip else None)
         return self.screens()
 
+    def mirror_quality(self) -> dict:
+        return {"current": self._mirror.quality, "options": self._mirror.quality_options()}
+
+    def set_mirror_quality(self, quality: str) -> dict:
+        self._mirror.set_quality(str(quality))
+        return self.mirror_quality()
+
 
 class _WebView2Failure(logging.Handler):
     """pywebview only logs a failed WebView2 start and leaves an empty white

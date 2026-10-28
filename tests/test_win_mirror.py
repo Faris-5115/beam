@@ -141,7 +141,7 @@ def test_snapshot_lists_screens_but_not_speakers(tmp_path, engine):
     finally:
         fake.close()
     assert snap == {
-        "available": True, "error": "",
+        "available": True, "error": "", "quality": "high",
         "screens": [{"name": "bedroom tv", "ip": "10.0.0.9", "port": 7100, "model": ""},
                     {"name": "Living room", "ip": "10.0.0.5", "port": 7000,
                      "model": "AppleTV14,1"}],
@@ -248,3 +248,45 @@ def test_real_engine_mirrors_to_test_receiver_with_pin(tmp_path):
         receiver.terminate()
         receiver.wait(5)
     assert not m.control.exists()       # no stale address for the next start
+
+
+# -- Beam: quality presets ------------------------------------------------------
+
+def test_quality_defaults_to_high_and_persists(tmp_path, engine):
+    m = ScreenMirror(tmp_path / "state", tmp_path / "logs", engine)
+    assert m.quality == win_mirror.DEFAULT_QUALITY == "high"
+    assert m.set_quality("max") == "max"
+    assert ScreenMirror(tmp_path / "state", tmp_path / "logs", engine).quality == "max"
+    with pytest.raises(ValueError):
+        m.set_quality("ultra")
+    (tmp_path / "state" / "mirror-quality").write_text("garbage")
+    assert m.quality == "high"
+    assert [o["id"] for o in m.quality_options()] == ["standard", "high", "max"]
+
+
+def test_engine_starts_with_the_quality_preset(tmp_path):
+    if os.name == "nt":
+        pytest.skip("needs a shell script as the engine")
+    engine = tmp_path / "mirror"
+    engine.mkdir()
+    argv_file = tmp_path / "argv"
+    exe = engine / win_mirror.EXE
+    exe.write_text(f"#!/bin/sh\necho \"$@\" > {argv_file}\nexit 1\n")
+    exe.chmod(0o755)
+    m = ScreenMirror(tmp_path / "state", tmp_path / "logs", engine)
+    for quality, expect in [("high", "-quality high -fps 60"),
+                            ("standard", "-quality standard -fps 30"),
+                            ("max", "-quality max -fps 60")]:
+        m.set_quality(quality)
+        with pytest.raises(MirrorError):
+            m.ensure()
+        assert argv_file.read_text().startswith(expect + " -daemonize"), argv_file.read_text()
+
+
+def test_desktop_api_quality(tmp_path, engine):
+    from multidrop import win_window
+    m = ScreenMirror(tmp_path / "state", tmp_path / "logs", engine)
+    api = win_window.DesktopApi(tmp_path, tmp_path, mirror=m)
+    assert api.mirror_quality()["current"] == "high"
+    assert api.set_mirror_quality("standard")["current"] == "standard"
+    assert len(api.mirror_quality()["options"]) == 3

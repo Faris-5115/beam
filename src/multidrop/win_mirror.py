@@ -61,6 +61,18 @@ def engine_env(engine: Path, state_dir: Path) -> dict[str, str]:
     return env
 
 
+# Beam's quality presets: doubletake -quality (beam-quality.patch) and frame rate.
+QUALITY_PRESETS: dict[str, dict] = {
+    "standard": {"label": "Standard", "detail": "1080p or 720p · 30 fps · least Wi-Fi",
+                 "args": ("-quality", "standard", "-fps", "30")},
+    "high": {"label": "High", "detail": "Full HD · 60 fps · sharp text",
+             "args": ("-quality", "high", "-fps", "60")},
+    "max": {"label": "Maximum", "detail": "Up to 4K (HEVC) on Apple TV 4K with an NVIDIA GPU · 60 fps",
+            "args": ("-quality", "max", "-fps", "60")},
+}
+DEFAULT_QUALITY = "high"
+
+
 def is_mirror_target(device: dict, caps: dict[str, dict]) -> bool:
     """caps: multidropd's /api/airplay entries by device id and IP. Receivers
     that announce no screen mirroring (speakers) are hidden; unknown ones are
@@ -80,6 +92,8 @@ class ScreenMirror:
         self.state_dir = state_dir
         self.log_dir = log_dir
         self.control = state_dir / "doubletake-control.json"
+        self._quality_file = state_dir / "mirror-quality"
+        self._running_quality: str | None = None   # preset of the doubletake we started
         self.proc: subprocess.Popen | None = None
         self._airplay_caps = airplay_caps
         self._caps: dict[str, dict] = {}
@@ -89,6 +103,41 @@ class ScreenMirror:
     @property
     def available(self) -> bool:
         return self.engine is not None
+
+    # -- quality preset ----------------------------------------------------------
+
+    @property
+    def quality(self) -> str:
+        try:
+            q = self._quality_file.read_text().strip()
+        except OSError:
+            q = ""
+        return q if q in QUALITY_PRESETS else DEFAULT_QUALITY
+
+    def set_quality(self, quality: str) -> str:
+        """Remember the preset. doubletake reads it at start, so a running
+        engine without active streams is restarted; with streams running the
+        preset applies from the next time mirroring starts."""
+        if quality not in QUALITY_PRESETS:
+            raise ValueError(f"unknown quality {quality!r}")
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self._quality_file.write_text(quality)
+        self._restart_if_idle()
+        return quality
+
+    def _restart_if_idle(self) -> None:
+        if self._running_quality in (None, self.quality):
+            return
+        try:
+            if self.request("status", timeout=3).get("streams"):
+                return                  # applied by ensure() after the streams end
+        except MirrorError:
+            pass
+        self._stop_engine()
+
+    def quality_options(self) -> list[dict]:
+        return [{"id": k, "label": v["label"], "detail": v["detail"]}
+                for k, v in QUALITY_PRESETS.items()]
 
     # -- doubletake's control protocol ---------------------------------------
 
@@ -125,20 +174,32 @@ class ScreenMirror:
         an earlier MultiDrop that ended without stopping it)."""
         with self._lock:
             if self.alive():
-                return
+                if self.proc is None or self._running_quality == self.quality:
+                    return
+                try:                        # ours, with an older preset
+                    busy = bool(self.request("status", timeout=3).get("streams"))
+                except MirrorError:
+                    busy = False
+                if busy:
+                    return
+                self._stop_engine()
             if self.engine is None:
                 raise MirrorError("screen mirroring is not part of this MultiDrop build")
             if self.proc is not None and self.proc.poll() is None:
                 self.proc.kill()
             self.state_dir.mkdir(parents=True, exist_ok=True)
             self.log_dir.mkdir(parents=True, exist_ok=True)
-            argv = [str(self.engine / EXE), *self.extra_args, "-daemonize",
+            quality = self.quality
+            argv = [str(self.engine / EXE), *QUALITY_PRESETS[quality]["args"],
+                    *self.extra_args, "-daemonize",
                     "-socket", "tcp:127.0.0.1:0", "-control-file", str(self.control)]
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             with open(self.log_dir / "doubletake.log", "ab") as out:
                 self.proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out,
                                              stderr=subprocess.STDOUT, creationflags=flags,
                                              env=engine_env(self.engine, self.state_dir))
+            self._running_quality = quality
+            log.info("doubletake started with %s quality", quality)
             for _ in range(100):
                 if self.alive():
                     return
@@ -185,7 +246,7 @@ class ScreenMirror:
                     "state": s.get("state"), "credential": s.get("credential_kind") or ""}
                    for s in status.get("streams") or []]
         return {"available": True, "screens": screens, "streams": streams,
-                "error": status.get("error") or ""}
+                "error": status.get("error") or "", "quality": self.quality}
 
     def _checked(self, resp: dict) -> dict:
         if not resp.get("ok"):
@@ -208,6 +269,9 @@ class ScreenMirror:
             self.request("disconnect", timeout=5)
         except MirrorError:
             pass
+        self._stop_engine()
+
+    def _stop_engine(self) -> None:
         if self.proc is not None and self.proc.poll() is None:
             self.proc.terminate()
             try:
@@ -218,3 +282,5 @@ class ScreenMirror:
             # Windows' terminate() is TerminateProcess: doubletake cannot
             # remove its control file itself, and the address would be stale.
             self.control.unlink(missing_ok=True)
+        self.proc = None
+        self._running_quality = None

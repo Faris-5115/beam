@@ -1,0 +1,360 @@
+Beam: screen quality presets for doubletake (LGPL-3.0), applied by CI after
+windows-support.patch. Adds -quality standard|high|max; see internal/airplay/quality.go.
+
+    git -C doubletake apply packaging/windows/doubletake/beam-quality.patch
+
+diff --git a/cmd/doubletake/main.go b/cmd/doubletake/main.go
+index abee07e..67b2e8e 100644
+--- a/cmd/doubletake/main.go
++++ b/cmd/doubletake/main.go
+@@ -81,7 +81,12 @@ func main() {
+ 	x11WindowID := flag.String("x11-window-id", "", "X11 window id to capture, decimal or 0xhex")
+ 	x11WindowName := flag.String("x11-window-name", "", "X11 window name to capture; prefer -x11-window-id")
+ 	noCursor := flag.Bool("no-cursor", false, "Don't show the mouse cursor in the captured video")
++	quality := flag.String("quality", "standard", "Screen quality preset: standard (doubletake default), high (1080p+ and ~2.5x bitrate) or max (high, plus 4K HEVC on capable receivers and encoders)")
+ 	flag.Parse()
++	if err := airplay.ValidateQuality(*quality); err != nil {
++		log.Fatalf("invalid -quality: %v", err)
++	}
++	airplay.SetQuality(airplay.Quality(*quality))
+ 	if err := airplay.ValidateHWAccel(*hwaccel); err != nil {
+ 		log.Fatalf("invalid -hwaccel: %v", err)
+ 	}
+diff --git a/internal/airplay/capture.go b/internal/airplay/capture.go
+index 40cd872..087bd41 100644
+--- a/internal/airplay/capture.go
++++ b/internal/airplay/capture.go
+@@ -255,6 +255,12 @@ func PrepareCapture(ctx context.Context, cfg CaptureConfig) (*CapturePreparation
+ 		// opt-in and can be tuned with the joint latency override.
+ 		_, preparation.measuredVideoLatency = automaticHEVCProfile(cfg.HWAccel, cfg.FPS)
+ 	}
++	if cfg.VideoCodec == VideoCodecAuto && CurrentQuality() == QualityMax {
++		// Beam: max quality lets automatic negotiation pick 4K HEVC, but only
++		// after the hardware encoder passed the timed 4K probe.
++		preparation.automaticHEVCAvail, preparation.measuredVideoLatency = automaticHEVCProfile(cfg.HWAccel, cfg.FPS)
++		log.Printf("[CAPTURE] max quality: automatic 4K HEVC %s", map[bool]string{true: "available", false: "unavailable, using H.264"}[preparation.automaticHEVCAvail])
++	}
+ 	if cfg.VideoCodec == VideoCodecHEVC && !preparation.timestampedOutput {
+ 		return nil, fmt.Errorf("HEVC capture requires GStreamer rtph265pay, rtponviftimestamp, and rtpstreampay")
+ 	}
+@@ -328,6 +334,9 @@ func PrepareTestCapture(ctx context.Context, cfg CaptureConfig) (*CapturePrepara
+ 	if cfg.VideoCodec == VideoCodecHEVC {
+ 		_, preparation.measuredVideoLatency = automaticHEVCProfile(cfg.HWAccel, cfg.FPS)
+ 	}
++	if cfg.VideoCodec == VideoCodecAuto && CurrentQuality() == QualityMax {
++		preparation.automaticHEVCAvail, preparation.measuredVideoLatency = automaticHEVCProfile(cfg.HWAccel, cfg.FPS)
++	}
+ 	if cfg.VideoCodec == VideoCodecHEVC && !preparation.timestampedOutput {
+ 		return nil, fmt.Errorf("HEVC capture requires GStreamer rtph265pay, rtponviftimestamp, and rtpstreampay")
+ 	}
+@@ -2365,8 +2374,9 @@ func captureBitrateKbps(cfg CaptureConfig) int {
+ 		}
+ 	}
+ 
+-	bitrate := recommendedBitrateKbps(width, height, fps)
+-	log.Printf("[CAPTURE] auto bitrate selected: %d kbps for %dx%d@%dfps", bitrate, width, height, fps)
++	quality := CurrentQuality()
++	bitrate := qualityBitrateKbps(quality, cfg.VideoCodec, width, height, fps)
++	log.Printf("[CAPTURE] auto bitrate selected: %d kbps for %dx%d@%dfps (%s quality)", bitrate, width, height, fps, quality)
+ 	return bitrate
+ }
+ 
+diff --git a/internal/airplay/quality.go b/internal/airplay/quality.go
+new file mode 100644
+index 0000000..64e859b
+--- /dev/null
++++ b/internal/airplay/quality.go
+@@ -0,0 +1,118 @@
++package airplay
++
++// Beam quality presets (Beam's patch on top of doubletake).
++//
++// doubletake's defaults favour compatibility: H.264 at the receiver's nominal
++// canvas (1280x720 when the receiver does not describe its display), ~0.067
++// bits per pixel, 30 fps. That is legible for video but soft for desktop text.
++// The presets below change only how the canvas and bitrate are chosen:
++//
++//	standard  doubletake's behaviour, unchanged.
++//	high      H.264 at least 1920x1080 whenever the receiver can decode it
++//	          (also when it omits its display description) and ~2.5x the
++//	          automatic bitrate, so text and UI stay sharp.
++//	max       high, plus HEVC at the receiver's maximum canvas (up to
++//	          3840x2160) when the receiver advertises multi-codec screen
++//	          support and a hardware HEVC encoder passes doubletake's 4K timing
++//	          probe. Anything else falls back to high.
++
++import (
++	"fmt"
++	"sync"
++)
++
++type Quality string
++
++const (
++	QualityStandard Quality = "standard"
++	QualityHigh     Quality = "high"
++	QualityMax      Quality = "max"
++)
++
++const (
++	// high/max: bits per pixel ≈ 1/6000 kbps per pixel·fps (≈0.167 bpp).
++	highH264PixelsPerKbps = 6000
++	// HEVC needs roughly two thirds of H.264's rate for the same quality.
++	highHEVCPixelsPerKbps = 9000
++	highMinBitrateKbps    = 4000
++	highMaxH264Kbps       = 25000
++	highMaxHEVCKbps       = 40000
++)
++
++var (
++	qualityMu      sync.RWMutex
++	currentQuality = QualityStandard
++)
++
++// ValidateQuality reports whether q names a preset.
++func ValidateQuality(q string) error {
++	switch Quality(q) {
++	case QualityStandard, QualityHigh, QualityMax:
++		return nil
++	}
++	return fmt.Errorf("unknown quality %q (use standard, high or max)", q)
++}
++
++// SetQuality selects the process-wide preset. Call it once at startup.
++func SetQuality(q Quality) {
++	if q == "" {
++		q = QualityStandard
++	}
++	qualityMu.Lock()
++	currentQuality = q
++	qualityMu.Unlock()
++}
++
++// CurrentQuality returns the process-wide preset.
++func CurrentQuality() Quality {
++	qualityMu.RLock()
++	defer qualityMu.RUnlock()
++	return currentQuality
++}
++
++func qualityRaisesCanvas(q Quality) bool { return q == QualityHigh || q == QualityMax }
++
++// qualityBitrateKbps is the automatic bitrate for a canvas under preset q.
++func qualityBitrateKbps(q Quality, codec VideoCodec, width, height, fps int) int {
++	if !qualityRaisesCanvas(q) {
++		return recommendedBitrateKbps(width, height, fps)
++	}
++	if width <= 0 || height <= 0 || fps <= 0 {
++		return defaultVideoBitrateKbps * 2
++	}
++	perKbps, ceiling := highH264PixelsPerKbps, highMaxH264Kbps
++	if normalizeVideoCodec(codec) == VideoCodecHEVC {
++		perKbps, ceiling = highHEVCPixelsPerKbps, highMaxHEVCKbps
++	}
++	bitrate := (width*height*fps + perKbps/2) / perKbps
++	if bitrate < highMinBitrateKbps {
++		return highMinBitrateKbps
++	}
++	if bitrate > ceiling {
++		return ceiling
++	}
++	return bitrate
++}
++
++// qualityH264Canvas is the H.264 screen canvas under preset q. standard keeps
++// the receiver's nominal canvas. high/max never go below 1080p when the
++// receiver's decoder allows it, and assume a 1080p decoder for screen
++// receivers that do not describe their display (doubletake would otherwise
++// fall back to 1280x720 for receivers without feature 28).
++func (i *ReceiverInfo) qualityH264Canvas(q Quality) (int, int) {
++	nominalW, nominalH := i.MirrorSize()
++	if !qualityRaisesCanvas(q) || i == nil {
++		return nominalW, nominalH
++	}
++	if w, h := i.DisplaySize(); (w <= 0 || h <= 0) && i.HasFeature(7) {
++		return 1920, 1080
++	}
++	if nominalW >= 1920 || nominalH >= 1080 {
++		return nominalW, nominalH
++	}
++	maxW, maxH := i.MaxVideoSize()
++	if maxW >= 1920 && maxH >= 1080 {
++		return fitVideoSize(maxW, maxH, 1920, 1080)
++	}
++	return nominalW, nominalH
++}
+diff --git a/internal/airplay/quality_test.go b/internal/airplay/quality_test.go
+new file mode 100644
+index 0000000..a59d45e
+--- /dev/null
++++ b/internal/airplay/quality_test.go
+@@ -0,0 +1,125 @@
++package airplay
++
++import "testing"
++
++func withQuality(t *testing.T, q Quality) {
++	t.Helper()
++	prev := CurrentQuality()
++	SetQuality(q)
++	t.Cleanup(func() { SetQuality(prev) })
++}
++
++func screenReceiver(features uint64, displays ...DisplayInfo) *ReceiverInfo {
++	return &ReceiverInfo{Features: features | 1<<7, Displays: displays}
++}
++
++func TestQualityValidate(t *testing.T) {
++	for _, q := range []string{"standard", "high", "max"} {
++		if err := ValidateQuality(q); err != nil {
++			t.Fatalf("%s: %v", q, err)
++		}
++	}
++	if ValidateQuality("ultra") == nil {
++		t.Fatal("ultra accepted")
++	}
++}
++
++func TestQualityStandardKeepsDoubletakeDefaults(t *testing.T) {
++	withQuality(t, QualityStandard)
++	sel, err := screenReceiver(0).selectVideo(VideoCodecAuto, true)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if sel.codec != VideoCodecH264 || sel.width != 1280 || sel.height != 720 {
++		t.Fatalf("standard without displays = %s %dx%d, want H.264 1280x720", sel.codec, sel.width, sel.height)
++	}
++	if got, want := qualityBitrateKbps(QualityStandard, VideoCodecH264, 1920, 1080, 30), recommendedBitrateKbps(1920, 1080, 30); got != want {
++		t.Fatalf("standard bitrate %d, want %d", got, want)
++	}
++}
++
++func TestQualityHighRaisesLegacy720pCanvas(t *testing.T) {
++	withQuality(t, QualityHigh)
++	sel, err := screenReceiver(0).selectVideo(VideoCodecAuto, false)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if sel.codec != VideoCodecH264 || sel.width != 1920 || sel.height != 1080 {
++		t.Fatalf("high without displays = %s %dx%d, want H.264 1920x1080", sel.codec, sel.width, sel.height)
++	}
++}
++
++func TestQualityHighUsesDecoderMaximumUpTo1080p(t *testing.T) {
++	withQuality(t, QualityHigh)
++	r := screenReceiver(0, DisplayInfo{WidthPixels: 1280, HeightPixels: 720, WidthPixelsMax: 3840, HeightPixelsMax: 2160})
++	w, h := r.qualityH264Canvas(QualityHigh)
++	if w != 1920 || h != 1080 {
++		t.Fatalf("canvas %dx%d, want 1920x1080", w, h)
++	}
++	// A receiver whose decoder tops out at 720p stays there.
++	small := screenReceiver(0, DisplayInfo{WidthPixels: 1280, HeightPixels: 720, WidthPixelsMax: 1280, HeightPixelsMax: 720})
++	if w, h := small.qualityH264Canvas(QualityHigh); w != 1280 || h != 720 {
++		t.Fatalf("720p decoder canvas %dx%d, want 1280x720", w, h)
++	}
++	// A nominal canvas already at 1080p or larger is kept.
++	big := screenReceiver(0, DisplayInfo{WidthPixels: 1920, HeightPixels: 1200})
++	if w, h := big.qualityH264Canvas(QualityHigh); w != 1920 || h != 1200 {
++		t.Fatalf("nominal canvas %dx%d, want 1920x1200", w, h)
++	}
++}
++
++func TestQualityHighBitrate(t *testing.T) {
++	cases := []struct {
++		codec            VideoCodec
++		w, h, fps, want int
++	}{
++		{VideoCodecH264, 1920, 1080, 60, 20736},
++		{VideoCodecH264, 1920, 1080, 30, 10368},
++		{VideoCodecH264, 640, 360, 30, highMinBitrateKbps},
++		{VideoCodecH264, 3840, 2160, 60, highMaxH264Kbps},
++		{VideoCodecHEVC, 3840, 2160, 30, 27648},
++		{VideoCodecHEVC, 3840, 2160, 60, highMaxHEVCKbps},
++	}
++	for _, c := range cases {
++		if got := qualityBitrateKbps(QualityHigh, c.codec, c.w, c.h, c.fps); got != c.want {
++			t.Errorf("%s %dx%d@%d = %d kbps, want %d", c.codec, c.w, c.h, c.fps, got, c.want)
++		}
++	}
++	if got := captureBitrateKbps(CaptureConfig{FPS: 60, MaxWidth: 1920, MaxHeight: 1080}); got != recommendedBitrateKbps(1920, 1080, 60) {
++		t.Errorf("standard capture bitrate changed: %d", got)
++	}
++	withQuality(t, QualityHigh)
++	if got := captureBitrateKbps(CaptureConfig{FPS: 60, MaxWidth: 1920, MaxHeight: 1080}); got != 20736 {
++		t.Errorf("high capture bitrate %d, want 20736", got)
++	}
++}
++
++func TestQualityMaxSelectsHEVCOnlyWhenAvailable(t *testing.T) {
++	withQuality(t, QualityMax)
++	r := screenReceiver(1<<featureScreenMultiCodec,
++		DisplayInfo{WidthPixels: 1920, HeightPixels: 1080, WidthPixelsMax: 3840, HeightPixelsMax: 2160})
++	sel, err := r.selectVideo(VideoCodecAuto, true)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if sel.codec != VideoCodecHEVC || sel.width != 3840 || sel.height != 2160 {
++		t.Fatalf("max with HEVC = %s %dx%d, want HEVC 3840x2160", sel.codec, sel.width, sel.height)
++	}
++	// No hardware HEVC encoder: H.264 1080p.
++	sel, _ = r.selectVideo(VideoCodecAuto, false)
++	if sel.codec != VideoCodecH264 || sel.width != 1920 {
++		t.Fatalf("max without encoder = %s %dx%d", sel.codec, sel.width, sel.height)
++	}
++	// Receiver without multi-codec support: H.264 1080p.
++	plain := screenReceiver(0, DisplayInfo{WidthPixels: 1920, HeightPixels: 1080, WidthPixelsMax: 3840, HeightPixelsMax: 2160})
++	sel, _ = plain.selectVideo(VideoCodecAuto, true)
++	if sel.codec != VideoCodecH264 {
++		t.Fatalf("max without receiver HEVC = %s", sel.codec)
++	}
++	// 1080p TV: no point in HEVC.
++	tv1080 := screenReceiver(1<<featureScreenMultiCodec, DisplayInfo{WidthPixels: 1920, HeightPixels: 1080})
++	sel, _ = tv1080.selectVideo(VideoCodecAuto, true)
++	if sel.codec != VideoCodecH264 || sel.width != 1920 {
++		t.Fatalf("max on 1080p TV = %s %dx%d", sel.codec, sel.width, sel.height)
++	}
++}
+diff --git a/internal/airplay/video_codec.go b/internal/airplay/video_codec.go
+index b63218a..65dd028 100644
+--- a/internal/airplay/video_codec.go
++++ b/internal/airplay/video_codec.go
+@@ -58,7 +58,6 @@ type videoSelection struct {
+ // snapshot. The interoperable screen sender path uses AVC at the receiver's
+ // nominal canvas. HEVC remains an explicit diagnostic override.
+ func (i *ReceiverInfo) selectVideo(requested VideoCodec, automaticHEVCAvailable bool) (videoSelection, error) {
+-	_ = automaticHEVCAvailable // Retained for programmatic compatibility.
+ 	if requested == "" {
+ 		requested = VideoCodecH264
+ 	}
+@@ -66,9 +65,10 @@ func (i *ReceiverInfo) selectVideo(requested VideoCodec, automaticHEVCAvailable
+ 		return videoSelection{}, err
+ 	}
+ 
++	quality := CurrentQuality()
+ 	switch requested {
+ 	case VideoCodecH264:
+-		width, height := i.MirrorSize()
++		width, height := i.qualityH264Canvas(quality)
+ 		return videoSelection{codec: VideoCodecH264, width: width, height: height, reason: "explicit H.264"}, nil
+ 	case VideoCodecHEVC:
+ 		width, height, err := i.videoCanvas(VideoCodecHEVC)
+@@ -77,8 +77,17 @@ func (i *ReceiverInfo) selectVideo(requested VideoCodec, automaticHEVCAvailable
+ 		}
+ 		return videoSelection{codec: VideoCodecHEVC, width: width, height: height, reason: "explicit HEVC"}, nil
+ 	case VideoCodecAuto:
+-		width, height := i.MirrorSize()
+-		return videoSelection{codec: VideoCodecH264, width: width, height: height, reason: "automatic compatibility path"}, nil
++		if quality == QualityMax && automaticHEVCAvailable && i.supportsVideoCodec(VideoCodecHEVC) {
++			if width, height, ok := i.highResolutionVideoCanvas(); ok {
++				return videoSelection{codec: VideoCodecHEVC, width: width, height: height, reason: "max quality: HEVC at the receiver maximum"}, nil
++			}
++		}
++		width, height := i.qualityH264Canvas(quality)
++		reason := "automatic compatibility path"
++		if quality != QualityStandard {
++			reason = fmt.Sprintf("%s quality H.264", quality)
++		}
++		return videoSelection{codec: VideoCodecH264, width: width, height: height, reason: reason}, nil
+ 	default:
+ 		panic("validated video codec has no selection policy")
+ 	}
