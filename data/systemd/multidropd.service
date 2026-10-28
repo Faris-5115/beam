@@ -1,0 +1,31 @@
+# multidrop daemon as a systemd user service. NOT installed automatically.
+#
+# Install (as the user, no root):
+#   mkdir -p ~/.config/systemd/user
+#   cp data/systemd/multidropd.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now multidropd
+#   multidrop ui --open
+#
+# ExecStart assumes the checkout in ~/multidrop with its venv; adjust if needed.
+
+[Unit]
+Description=multidrop – LocalSend and Quick Share for Linux
+Documentation=file://%h/multidrop/README.md
+After=graphical-session.target network-online.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/multidrop/.venv/bin/multidropd
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+# Optional hardening. Needs unprivileged user namespaces for user services
+# (may be restricted on Ubuntu), and ReadWritePaths must include a custom
+# download_dir, so it is off by default:
+#ProtectSystem=strict
+#ReadWritePaths=-%h/Downloads -%h/.local/share/multidrop -%h/.local/state/multidrop %t
+
+[Install]
+WantedBy=graphical-session.target
