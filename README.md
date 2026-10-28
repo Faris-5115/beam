@@ -72,8 +72,8 @@ upstream ships switched off.
 
 GitHub Actions builds everything on every push: tests on Linux and Windows,
 the mirroring engine with both patches, `Beam.exe` (PyInstaller),
-`Beam-Setup.exe` (Inno Setup) and an install/uninstall check. Push a tag like
-`v1.0.0` to publish a release. See [.github/workflows/build.yml](.github/workflows/build.yml).
+`Beam-Setup.exe` (Inno Setup) and an install/uninstall check. To publish a
+release, bump `version` in `pyproject.toml`: the next push to `main` releases it. See [.github/workflows/build.yml](.github/workflows/build.yml).
 
 To run from source on Windows:
 

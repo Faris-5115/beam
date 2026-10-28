@@ -152,7 +152,9 @@ jobs:
             dist/Beam-Setup.exe
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    # A release per version: pushing a v* tag, or a push to main whose
+    # pyproject.toml version has no release yet (bump the version to ship).
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
     needs: [test-linux, test-windows, windows]
     runs-on: ubuntu-latest
     steps:
@@ -161,10 +163,18 @@ jobs:
         with:
           name: Beam-windows
           path: dist
-      - name: Create release
+      - name: Create release (once per version)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$GITHUB_REF_NAME" dist/*
-          --title "Beam $GITHUB_REF_NAME"
-          --notes-file packaging/RELEASE_NOTES.md
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="v$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)"
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag is already released"
+            exit 0
+          fi
+          gh release create "$tag" dist/* --target "$GITHUB_SHA" \
+            --title "Beam $tag" --notes-file packaging/RELEASE_NOTES.md
